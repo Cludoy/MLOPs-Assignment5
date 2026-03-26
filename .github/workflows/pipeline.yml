@@ -2,8 +2,6 @@ name: Assignment 5 ML Pipeline
 
 on:
   push:
-    branches-ignore:
-      - main
   pull_request:
   workflow_dispatch:
     inputs:
@@ -12,23 +10,30 @@ on:
         required: false
         default: ""
 
+env:
+  PYTHON_VERSION: "3.10"
+  WORKING_DIR: "assignment5"
+
 jobs:
   validate:
+    name: Validate Model
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: assignment 5
+        working-directory: ${{ env.WORKING_DIR }}
     env:
       MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
       MLFLOW_EXPERIMENT_NAME: assignment5_pipeline
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -40,31 +45,35 @@ jobs:
 
       - name: Train model and log to MLflow
         env:
-          FORCE_ACCURACY: ${{ github.event.inputs.force_accuracy }}
+          FORCE_ACCURACY: ${{ inputs.force_accuracy }}
         run: python train.py
 
       - name: Upload model info
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: model-info
-          path: assignment 5/model_info.txt
+          path: ${{ env.WORKING_DIR }}/model_info.txt
+          if-no-files-found: error
 
   deploy:
+    name: Deploy Model
     runs-on: ubuntu-latest
     needs: validate
     defaults:
       run:
-        working-directory: assignment 5
+        working-directory: ${{ env.WORKING_DIR }}
     env:
       MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -72,13 +81,15 @@ jobs:
           pip install mlflow
 
       - name: Download model info artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v4
         with:
           name: model-info
-          path: assignment 5
+          path: ${{ env.WORKING_DIR }}
 
       - name: Check accuracy threshold
         run: python check_threshold.py
 
-      - name: Mock build docker image
-        run: echo "Building Docker image for Run ID: $(cat model_info.txt)"
+      - name: Build Docker image (mock)
+        run: |
+          RUN_ID=$(cat model_info.txt)
+          echo "Building Docker image for Run ID: ${RUN_ID}"
